@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-800;
+  }
+  body {
+    @apply bg-black text-gray-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar & Fade Effect */
+@layer components {
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+  }
+  .custom-scrollbar:hover,
+  .custom-scrollbar:focus-within,
+  .custom-scrollbar.is-scrolling {
+    scrollbar-color: rgb(55 65 81) transparent; /* gray-700 */
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 0.3s ease;
+  }
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb,
+  .custom-scrollbar:focus-within::-webkit-scrollbar-thumb,
+  .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb {
+    @apply bg-gray-700;
+  }
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  /* Fully hidden scrollbar — keeps the element scrollable but
+     removes the visual track/thumb (and Firefox/Edge arrow buttons). */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  /* Fade effect at the top of a scrolling div */
+  .mask-fade-top {
+    mask-image: linear-gradient(to top, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, black 90%, transparent 100%);
+    transition: mask-image 0.3s ease-in-out, -webkit-mask-image 0.3s ease-in-out;
+  }
+
+  /* Fade effect at the bottom of a scrolling div */
+  .mask-fade-bottom {
+    mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 90%, transparent 100%);
+    transition: mask-image 0.3s ease-in-out, -webkit-mask-image 0.3s ease-in-out;
+  }
+
+  .mask-fade-both {
+    mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+  }
+
+  /* Ensure a fluid transition */
+  .mask-none {
+    mask-image: linear-gradient(to bottom, black 0%, black 100%, black 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 100%, black 100%);
+    transition: mask-image 0.3s ease-in-out, -webkit-mask-image 0.3s ease-in-out;
+  }
+}
+
+/* Horizontal scroll animation for token creation banner */
+@keyframes scroll-x {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll-x {
+  animation: scroll-x 30s linear infinite;
+}
+
+.animate-scroll-x:hover {
+  animation-play-state: paused;
+}
+
+/* Privy modal theming — match Koala Pad brand */
+#privy-dialog,
+#privy-modal {
+  --privy-border-radius-sm: 0.5rem;
+  --privy-border-radius-md: 0.75rem;
+  --privy-border-radius-lg: 1rem;
+  --privy-color-background: #111827;
+  --privy-color-background-2: #1f2937;
+  --privy-color-foreground: #f3f4f6;
+  --privy-color-foreground-2: #9ca3af;
+  --privy-color-foreground-accent: #ffffff;
+  --privy-color-accent: #7c3aed;
+  --privy-color-success: #10b981;
+  --privy-color-error: #ef4444;
+  font-family: 'Poppins', system-ui, sans-serif;
+}

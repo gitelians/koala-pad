@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Supabase
+supabase/
+
+# Just remove this line to upload also the smart contracts on github
+contracts/
+
+# Claude session
+.claude/
+
+# Executable
+run.bat
+
+# Build outputs
+dist/
+build/
+artifacts/
+cache/
+typechain-types/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Editor temp files
+*.swp
+*.swo
+*~
+
