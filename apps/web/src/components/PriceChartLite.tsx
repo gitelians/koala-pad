@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react'
 // BNB/USD price — shared module-level cache (avoids duplicate CoinGecko hits).
-import { getBnbPrice as getBnbUsd } from '../lib/bnbPrice'
+import { getBnbPrice as getBnbUsd, getCachedBnbPrice } from '../lib/bnbPrice'
 import {
   createChart,
   ColorType,
@@ -236,7 +236,7 @@ function PriceChartLite({
   const [interval, setIntervalState] = useState<Interval>(initialInterval)
   const [mode, setMode] = useState<Mode>(defaultMode)
   const [currency, setCurrency] = useState<Currency>(defaultCurrency)
-  const [bnbUsd, setBnbUsd] = useState<number>(() => cachedBnb?.price ?? 600)
+  const [bnbUsd, setBnbUsd] = useState<number>(() => getCachedBnbPrice())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEmpty, setIsEmpty] = useState(false)

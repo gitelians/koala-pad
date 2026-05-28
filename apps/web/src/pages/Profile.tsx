@@ -128,7 +128,7 @@ export default function Profile() {
   const [draftUsername, setDraftUsername] = useState('')
   const [savingUsername, setSavingUsername] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
-  const [questStats, setQuestStats] = useState<{ completed: number; total: number; claimable: number }>({ completed: 0, total: 0, claimable: 0 })
+  const [, setQuestStats] = useState<{ completed: number; total: number; claimable: number }>({ completed: 0, total: 0, claimable: 0 })
   const usernameInputRef = useRef<HTMLInputElement>(null)
 
   const handleQuestStats = useCallback(
