@@ -2,7 +2,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { useDisconnect } from 'wagmi'
 import { usePrivy } from '@privy-io/react-auth'
 import { useState, useEffect, useRef } from 'react'
-import { Search, Menu, User, LogOut, Coins } from 'lucide-react'
+import { Search, Menu, User, LogOut } from 'lucide-react'
+import { PiTreasureChestLight } from "react-icons/pi";
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getQuestProgress } from '../lib/supabaseApi'
@@ -131,9 +132,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
         <button
           type="button"
           onClick={() => setMyTokensOpen(true)}
-          className="flex items-center gap-2 h-10 px-4 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 transition-all duration-200 text-sm text-gray-300 hover:text-white"
+          className="flex items-center gap-2 h-10 px-4 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 transition-all duration-200 text-sm text-gray-200 hover:text-white"
         >
-          <Coins size={16} />
+          <PiTreasureChestLight size={16} />
           <span className="hidden md:inline">My Tokens</span>
         </button>
 
@@ -144,7 +145,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 transition-all duration-200 text-sm text-gray-500 hover:text-gray-300 md:w-60 w-auto"
+            className="flex items-center gap-2 h-10 px-4 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 transition-all duration-200 text-sm text-gray-500 hover:text-white md:w-60 w-auto"
           >
             <Search size={16} />
             <span className="hidden md:inline">Search for coins...</span>
@@ -169,7 +170,7 @@ export default function Header({ onMenuToggle }: HeaderProps) {
               <div ref={profileRef}>
                 <button
                   onClick={() => setMenuOpen(!menuOpen)}
-                  className="relative flex items-center gap-2 h-10 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 active:scale-95 transition-colors md:px-4 px-3"
+                  className="relative flex items-center gap-2 h-10 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 hover:text-white active:scale-95 transition-colors md:px-4 px-3"
                 >
                   <User size={18} className="text-gray-300" />
                   <span className="hidden md:inline text-sm font-medium text-gray-200 max-w-[100px] truncate">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useBalance } from 'wagmi'
 import { ChevronDown, ArrowDownToLine, Check } from 'lucide-react'
 import { IoCopyOutline } from 'react-icons/io5'
+import { CiWallet } from 'react-icons/ci'
 import { SiBinance } from 'react-icons/si'
 import { getBnbPrice, getCachedBnbPrice } from '../lib/bnbPrice'
 
@@ -58,10 +59,7 @@ export default function WalletBalanceButton({ address }: WalletBalanceButtonProp
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 h-10 px-3 md:px-4 bg-gray-900/50 border border-gray-800 rounded-full hover:bg-gray-800/50 hover:border-gray-700 active:scale-95 transition-all duration-200 text-sm font-semibold text-gray-100"
       >
-        <span className="relative flex items-center justify-center">
-          <span className="absolute inline-flex h-2 w-2 rounded-full bg-violet-500 opacity-75 animate-ping" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500 shadow-[0_0_6px_rgba(139,92,246,0.9)]" />
-        </span>
+        <CiWallet size={18} className="text-gray-200" />
         <span>{usdLabel}</span>
         <ChevronDown
           size={14}
