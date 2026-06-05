@@ -1,7 +1,9 @@
-import { useChainId } from 'wagmi'
+import { useChainId, useReadContracts } from 'wagmi'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
+import { formatEther } from 'viem'
 import { getAllTokens } from '../lib/supabaseApi'
+import { ICO_ABI } from '../constants/abis'
 
 const MORALIS_KEY = import.meta.env.VITE_MORALIS_API_KEY as string | undefined
 
@@ -37,16 +39,64 @@ interface BalancesTabProps {
   bnbPrice: number
 }
 
+type SubTab = 'ico' | 'trading'
+
 export default function BalancesTab({ userAddress, bnbPrice }: BalancesTabProps) {
-  const chainId = useChainId()
-  const [holdings, setHoldings] = useState<MoralisToken[] | null>(null)
+  const [subTab, setSubTab] = useState<SubTab>('ico')
   const [koalaTokens, setKoalaTokens] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getAllTokens().then(setKoalaTokens).catch(console.error)
   }, [])
+
+  return (
+    <div>
+      {/* Sub-tabs: ICO (locked contributions in live ICOs) and Trading
+          (ERC-20 wallet balances, populated once ICO finalizes). */}
+      <div className="flex gap-2 mb-3">
+        {(['ico', 'trading'] as const).map((st) => (
+          <button
+            key={st}
+            onClick={() => setSubTab(st)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
+              subTab === st
+                ? 'bg-violet-600/20 text-violet-300 border-violet-500/40'
+                : 'bg-gray-900 text-gray-500 border-gray-800 hover:text-gray-300'
+            }`}
+          >
+            {st === 'ico' ? 'ICO' : 'Trading'}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'ico' ? (
+        <IcoHoldings userAddress={userAddress} bnbPrice={bnbPrice} koalaTokens={koalaTokens} />
+      ) : (
+        <WalletHoldings userAddress={userAddress} bnbPrice={bnbPrice} koalaTokens={koalaTokens} />
+      )}
+    </div>
+  )
+}
+
+const rowClass =
+  'flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors'
+
+// ────────────────────────────────────────────────────────────────────────────
+// Wallet token balances (via Moralis), enriched with KoalaPad metadata.
+// ────────────────────────────────────────────────────────────────────────────
+function WalletHoldings({
+  userAddress,
+  bnbPrice,
+  koalaTokens,
+}: {
+  userAddress: `0x${string}` | undefined
+  bnbPrice: number
+  koalaTokens: any[]
+}) {
+  const chainId = useChainId()
+  const [holdings, setHoldings] = useState<MoralisToken[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!userAddress) {
@@ -131,9 +181,6 @@ export default function BalancesTab({ userAddress, bnbPrice }: BalancesTabProps)
     )
   }
 
-  const rowClass =
-    'flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors'
-
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 divide-y divide-gray-800 overflow-hidden">
       {rows.map(({ moralis, koala, balanceNum, usdValue }) => {
@@ -196,6 +243,117 @@ export default function BalancesTab({ userAddress, bnbPrice }: BalancesTabProps)
           <div key={key} className={rowClass}>
             {inner}
           </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ICO participations — tokens still in their ICO phase where this wallet has a
+// net contribution > 0 on-chain (locked positions not yet reflected as ERC-20
+// balances, so they never show up under the Tokens sub-tab).
+// ────────────────────────────────────────────────────────────────────────────
+function IcoHoldings({
+  userAddress,
+  bnbPrice,
+  koalaTokens,
+}: {
+  userAddress: `0x${string}` | undefined
+  bnbPrice: number
+  koalaTokens: any[]
+}) {
+  const icoTokens = useMemo(
+    () =>
+      koalaTokens.filter(
+        (t) => (!t.phase || t.phase === 'ico') && t.ico_address,
+      ),
+    [koalaTokens],
+  )
+
+  // Two reads per ICO: net BNB contribution + tokens purchased. Flattened into
+  // one multicall; results are paired back up by index below.
+  const contracts = useMemo(() => {
+    if (!userAddress) return []
+    return icoTokens.flatMap((t) => [
+      {
+        address: t.ico_address as `0x${string}`,
+        abi: ICO_ABI,
+        functionName: 'contributions' as const,
+        args: [userAddress] as const,
+      },
+      {
+        address: t.ico_address as `0x${string}`,
+        abi: ICO_ABI,
+        functionName: 'tokensPurchased' as const,
+        args: [userAddress] as const,
+      },
+    ])
+  }, [icoTokens, userAddress])
+
+  const { data, isLoading } = useReadContracts({
+    contracts,
+    query: { enabled: !!userAddress && contracts.length > 0 },
+  })
+
+  const rows = useMemo(() => {
+    if (!data) return []
+    return icoTokens
+      .map((token, i) => {
+        const contribution = data[i * 2]?.result as bigint | undefined
+        const purchased = data[i * 2 + 1]?.result as bigint | undefined
+        const contributionBNB = contribution ? parseFloat(formatEther(contribution)) : 0
+        const purchasedNum = purchased ? parseFloat(formatEther(purchased)) : 0
+        return { token, contributionBNB, purchasedNum }
+      })
+      .filter((r) => r.contributionBNB > 0)
+      .sort((a, b) => b.contributionBNB - a.contributionBNB)
+  }, [data, icoTokens])
+
+  if (!userAddress) {
+    return (
+      <p className="text-sm text-gray-500 py-8 text-center">
+        Connect a wallet to see ICO participations.
+      </p>
+    )
+  }
+  if (isLoading) return <p className="text-sm text-gray-500">Loading...</p>
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-gray-500 py-8 text-center">
+        No active ICO participations.
+      </p>
+    )
+  }
+
+  return (
+    <div className="bg-gray-900 rounded-2xl border border-gray-800 divide-y divide-gray-800 overflow-hidden">
+      {rows.map(({ token, contributionBNB, purchasedNum }) => {
+        const usdValue = contributionBNB * bnbPrice
+        return (
+          <Link key={token.token_address} to={`/token/${token.token_address}`} className={rowClass}>
+            {token.image ? (
+              <img src={token.image} alt={token.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-600/40 to-purple-800/40 flex-shrink-0 flex items-center justify-center text-sm font-bold text-white/80">
+                {(token.symbol || '?')[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-100 truncate">{token.name}</div>
+              <div className="text-xs text-gray-300/50 truncate">${token.symbol}</div>
+            </div>
+            <div className="text-right flex flex-col items-end gap-0.5 min-w-[90px]">
+              <div className="text-sm font-bold text-gray-100 whitespace-nowrap">
+                {usdValue > 0 ? formatCompactUsd(usdValue) : `${contributionBNB.toFixed(4)} BNB`}
+              </div>
+              <div className="text-[11px] text-gray-400 whitespace-nowrap truncate max-w-[160px]">
+                {purchasedNum > 0
+                  ? `${purchasedNum.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${token.symbol}`
+                  : `${contributionBNB.toFixed(4)} BNB`}
+              </div>
+            </div>
+          </Link>
         )
       })}
     </div>

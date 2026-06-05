@@ -136,12 +136,14 @@ export default function WatchlistTab({ bnbPrice, foreignUserId }: WatchlistTabPr
               <div className="text-sm font-semibold text-gray-100 truncate">{meta.name || 'Loading...'}</div>
               <div className="text-xs text-gray-300/50 truncate">${meta.symbol || '...'}</div>
             </div>
-            <div className="hidden sm:flex items-center">
+            {/* Token phase badge */}
+            <div className="hidden sm:flex items-center mr-8">
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${phaseBadge.color}`}>
                 {phaseBadge.label}
               </span>
             </div>
-            <div className="text-right min-w-[90px]">
+            {/* Round or market cap */}
+            <div className="text-right">
               <div className="text-sm font-semibold text-gray-100 whitespace-nowrap">
                 {mcDisplay}
                 {phase !== 'ico' && marketCapUsd != null && (

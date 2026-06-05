@@ -17,7 +17,7 @@ const TOKEN_ABI = [
 ] as const
 
 type PhaseFilter = 'ico' | 'trading' | 'airdrop_complete'
-type SortMode = 'age' | 'marketcap' | 'progress'
+type SortMode = 'age' | 'progress' | 'marketcap'
 type SortDir = 'asc' | 'desc'
 type Range = [number, number]
 
@@ -298,8 +298,8 @@ export default function Coins() {
 
   const sortOptions: { key: SortMode; label: string; color: string }[] = [
     { key: 'age', label: 'Age', color: 'bg-cyan-400' },
-    { key: 'marketcap', label: 'Market Cap', color: 'bg-orange-400' },
     { key: 'progress', label: 'Progress', color: 'bg-violet-400' },
+    { key: 'marketcap', label: 'Market Cap', color: 'bg-orange-400' },
   ]
 
   const handleSortClick = (key: SortMode) => {

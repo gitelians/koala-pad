@@ -259,15 +259,22 @@ export const getTradesForToken = async (tokenAddress: string, limit = 50) => {
   return data || []
 }
 
-export const get24hVolume = async (tokenAddress: string) => {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { data, error } = await supabase
-    .from('trades')
-    .select('usd_value')
-    .eq('token_address', tokenAddress.toLowerCase())
-    .gte('created_at', oneDayAgo)
+/**
+ * Rolling 24h USD volume for a token.
+ *
+ * Aggregated server-side via the `get_24h_volume` RPC (index-backed on
+ * trades(token_address, created_at)) instead of pulling every row to the
+ * client. `bnbUsd` lets the RPC fall back to notional BNB × price for any
+ * trade missing a locked-in `usd_value`; pass the current BNB/USD so those
+ * rows aren't silently counted as $0.
+ */
+export const get24hVolume = async (tokenAddress: string, bnbUsd?: number) => {
+  const { data, error } = await supabase.rpc('get_24h_volume', {
+    p_token: tokenAddress.toLowerCase(),
+    p_bnb_usd: bnbUsd ?? null,
+  })
   if (error) throw error
-  return (data || []).reduce((sum: number, t: any) => sum + (Number(t.usd_value) || 0), 0)
+  return Number(data) || 0
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -587,6 +594,48 @@ export const getUserAirdrops = async (walletAddress: string) => {
   for (const t of tokens || []) tokenMap[t.token_address] = t
 
   return list.map((a: any) => ({ ...a, token: tokenMap[a.token_address] || null }))
+}
+
+/**
+ * Eligible-but-not-yet-triggered airdrops for `userId`.
+ *
+ * Reads from `claimable_airdrop_notifications` — the same table that powers
+ * the global ClaimableAirdropPopup. A row is present when the wallet was
+ * detected in the top-20% holder cohort and the token's vault is eligible.
+ * Once the airdrop fires, `tokens.airdrop_triggered` flips true and the
+ * shares are auto-distributed; those rows are filtered out here so the
+ * "My Airdrop" tab only shows actionable, pending entries.
+ *
+ * `notified_at` is intentionally ignored — that flag belongs to the popup's
+ * dismissal lifecycle and has no bearing on tab visibility.
+ */
+export const getPendingClaimableAirdrops = async (userId: string) => {
+  const { data: rows, error } = await supabase
+    .from('claimable_airdrop_notifications')
+    .select('id, token_address, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const list = rows || []
+  if (list.length === 0) return []
+
+  const tokenAddrs = [...new Set(list.map((r: any) => r.token_address))]
+  const { data: tokens } = await supabase
+    .from('tokens')
+    .select('token_address, name, symbol, image, phase, airdrop_triggered')
+    .in('token_address', tokenAddrs)
+
+  const tokenMap: Record<string, any> = {}
+  for (const t of tokens || []) tokenMap[t.token_address] = t
+
+  return list
+    .map((r: any) => ({ ...r, token: tokenMap[r.token_address] || null }))
+    .filter(
+      (r: any) =>
+        r.token &&
+        !r.token.airdrop_triggered &&
+        r.token.phase !== 'airdrop_complete',
+    )
 }
 
 export const markAirdropTriggered = async (tokenAddress: string) => {

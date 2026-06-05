@@ -17,6 +17,7 @@ import {
   uploadAvatar,
   getTokensByCreator,
   getUserAirdrops,
+  getPendingClaimableAirdrops,
   getProfileByWallet,
   getProfileCounts,
   isFollowing as apiIsFollowing,
@@ -163,19 +164,36 @@ export default function Profile() {
       .finally(() => setLoadingTokens(false))
   }, [profileUserId])
 
-  // Airdrops received by this wallet.
+  // My Airdrop list combines two sources:
+  //  • received  — rows in the `airdrops` table (share already distributed);
+  //                render the amount.
+  //  • pending   — eligible-but-not-yet-triggered, mirroring the
+  //                ClaimableAirdropPopup detection; render a "Pending" pill.
+  // A token can't be in both (pending is filtered to non-triggered), but we
+  // dedupe by token_address with received taking priority just in case.
   useEffect(() => {
-    if (!profileWallet) {
+    if (!profileUserId && !profileWallet) {
       setAirdrops([])
       setLoadingAirdrops(false)
       return
     }
     setLoadingAirdrops(true)
-    getUserAirdrops(profileWallet)
-      .then(setAirdrops)
+    Promise.all([
+      profileWallet ? getUserAirdrops(profileWallet) : Promise.resolve([]),
+      profileUserId ? getPendingClaimableAirdrops(profileUserId) : Promise.resolve([]),
+    ])
+      .then(([received, pending]) => {
+        const receivedTokens = new Set(received.map((a: any) => a.token_address))
+        setAirdrops([
+          ...received.map((a: any) => ({ ...a, kind: 'received' as const })),
+          ...pending
+            .filter((p: any) => !receivedTokens.has(p.token_address))
+            .map((p: any) => ({ ...p, kind: 'pending' as const })),
+        ])
+      })
       .catch(console.error)
       .finally(() => setLoadingAirdrops(false))
-  }, [profileWallet])
+  }, [profileUserId, profileWallet])
 
   // Profile counts (followers / following / created tokens).
   useEffect(() => {
@@ -737,7 +755,9 @@ export default function Profile() {
                 <p className="text-sm text-gray-500">Loading...</p>
               ) : airdrops.length === 0 ? (
                 <p className="text-sm text-gray-500 py-8 text-center">
-                  {isOwnProfile ? "You haven't received any airdrops yet." : "No airdrops received yet."}
+                  {isOwnProfile
+                    ? "You haven't received any airdrops yet."
+                    : 'No airdrops received yet.'}
                 </p>
               ) : (
                 <div className="bg-gray-900 rounded-2xl border border-gray-800 divide-y divide-gray-800 overflow-hidden">
@@ -755,7 +775,7 @@ export default function Profile() {
                     })()
                     return (
                       <Link
-                        key={a.id}
+                        key={`${a.kind}-${a.id}`}
                         to={`/token/${a.token_address}`}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors"
                       >
@@ -777,9 +797,15 @@ export default function Profile() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-bold text-emerald-400 whitespace-nowrap">
-                            +{amount}
-                          </div>
+                          {a.kind === 'pending' ? (
+                            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-yellow-500/20 text-yellow-300 border-yellow-500/30">
+                              Pending
+                            </span>
+                          ) : (
+                            <div className="text-sm font-bold text-emerald-400 whitespace-nowrap">
+                              +{amount}
+                            </div>
+                          )}
                         </div>
                       </Link>
                     )
@@ -842,16 +868,19 @@ export default function Profile() {
                           <div className="text-sm font-semibold text-gray-100 truncate">{token.name}</div>
                           <div className="text-xs text-gray-300/50 truncate">${token.symbol}</div>
                         </div>
-                        <div className="hidden sm:flex items-center">
+                        {/* Token phase badge */}
+                        <div className="hidden sm:flex items-center mr-8">
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${phaseBadge.color}`}>
                             {phaseBadge.label}
                           </span>
                         </div>
-                        <div className="hidden md:flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
+                        {/* Time ago */}
+                        <div className="hidden md:flex items-center gap-1 text-[11px] text-gray-500 w-20 justify-start">
                           <Clock size={11} />
                           <span>{timeAgo}</span>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-0.5">
+                        {/* Round or market cap */}
+                        <div className="text-right flex flex-col items-end gap-0.5 min-w-[40px]">
                           <div className="flex items-center justify-end gap-1 text-sm font-semibold text-gray-100 whitespace-nowrap">
                             {phase !== 'ico' && mcUsd != null && (
                               <BadgeDollarSign size={14} className="text-gray-400" />

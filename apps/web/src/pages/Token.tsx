@@ -135,12 +135,13 @@ export default function Token() {
     }).catch(err => console.error('Failed to fetch token metadata:', err))
   }, [tokenAddress])
 
-  // Fetch 24h volume from Supabase
+  // Fetch 24h volume from Supabase (server-side aggregation; bnbPrice lets the
+  // RPC value any trades missing a locked-in usd_value).
   useEffect(() => {
     if (!tokenAddress || phase === 'ico') return
 
     const fetchVolume = () => {
-      get24hVolume(tokenAddress)
+      get24hVolume(tokenAddress, bnbPrice)
         .then(vol => setVolume24h(vol))
         .catch(err => console.error('Error fetching 24h volume:', err))
     }
@@ -148,7 +149,7 @@ export default function Token() {
     fetchVolume()
     const interval = setInterval(fetchVolume, 30000)
     return () => clearInterval(interval)
-  }, [tokenAddress, phase]);
+  }, [tokenAddress, phase, bnbPrice]);
 
 
   // BNB price — shared cached fetcher (one CoinGecko hit per minute app-wide).

@@ -255,7 +255,13 @@ CHAIN_ID=97
 LUCKY_WHEEL_ADDRESS=<lucky-wheel-contract-address>
 PROTOCOL_TREASURY_ADDRESS=<protocol-treasury-address>
 ALLOWED_ORIGINS=https://your-app.com,https://www.your-app.com   # comma-separated allow-list
+
+# Trade indexer (index-trades function — see §7.6.1 / §9)
+BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545     # chain reads for eth_getLogs
+INDEXER_SECRET=<random-shared-secret>                          # must equal the Vault 'indexer_secret' used by the cron
 ```
+
+> **`INDEXER_SECRET` lives in two stores that must hold the same value:** the Edge Function secret (read by the function via `Deno.env`) and a Vault secret named `indexer_secret` (read by the `pg_cron` job). Rotating it means updating both.
 
 > **CLAIM_SIGNER_PRIVATE_KEY** is a hot wallet that signs game prizes. Its matching public key must be registered in `ProtocolTreasury` as `airdropSigner`, and passed as the `signer` argument to the `LuckyWheel` constructor.
 
@@ -1223,6 +1229,46 @@ Selling requires an `approve()` call first (ERC-20 standard):
 
 ---
 
+### 7.6.1 Trade Recording & Volume Pipeline
+
+Volume (and the candlestick chart, the "Best Tokens" 24h ranking, and the per-token trade/trader counters) all derive from the `trades` table. Rows reach that table through **two complementary paths**:
+
+**1. Client fast-path (instant UX).** When a swap confirms in the browser, `Token.tsx` writes a row via `upsertTrade()` (keyed on `tx_hash`). This is immediate so the user sees their trade right away, but it has two known imprecisions:
+- For **sells**, `usd_value` is computed from the pool's spot price read *before* the swap mined, so it's slightly off (the swap itself moves the price).
+- `created_at` is the browser's write time, and if the user closes the tab before confirmation the row may never be written at all.
+
+**2. Canonical indexer (source of truth).** The `index-trades` edge function (see §9) runs every minute via `pg_cron`, reads the Pool `Swap(user, amountIn, amountOut, isBuyingToken)` events with `eth_getLogs`, and **upserts the same rows by `tx_hash`**. Because it reads the executed on-chain amounts, it writes:
+- **exact `usd_value`** — derived from the real BNB leg (`amountIn` for buys, `amountOut` for sells) × BNB/USD, so sells are no longer mis-priced;
+- **exact `block_time`** — from the block's timestamp;
+- a resolved `user_id` (by wallet) so quest attribution survives.
+
+Since both paths upsert on `tx_hash`, the indexer transparently corrects the client's approximate row and backfills any trade the browser missed. The block cursor in `indexer_state` only moves forward, and the upsert is idempotent, so re-runs are safe.
+
+**24h volume calculation.** `supabaseApi.ts → get24hVolume(tokenAddress, bnbUsd)` calls the server-side RPC `get_24h_volume(p_token, p_bnb_usd)` rather than pulling rows to the client. The RPC:
+
+```sql
+sum(
+  coalesce(
+    usd_value,                                   -- locked-in value (preferred)
+    greatest(                                    -- fallback for any null-usd row:
+      bnb_amount,                                --   buy leg (BNB in)
+      token_amount * price_bnb                   --   sell leg (sells store bnb_amount = 0)
+    ) * p_bnb_usd
+  )
+)
+where lower(token_address) = lower(p_token)
+  and coalesce(block_time, created_at) >= now() - interval '24 hours'
+```
+
+Key points:
+- Aggregated in Postgres against the covering index `idx_trades_token_blocktime (token_address, block_time)` — no client-side reduce.
+- The `greatest(...)` fallback means a row missing `usd_value` still contributes (the caller passes the live BNB/USD); sells fall back to `token_amount × price_bnb` because their `bnb_amount` leg is `0`.
+- The 24h window filters on `coalesce(block_time, created_at)`, so it uses true block time once the indexer has stamped the row, and never mis-buckets backfilled history.
+
+**Time-series / candles.** `get_token_candles(p_token, p_interval, p_limit)` buckets on the same `coalesce(block_time, created_at)`, so the OHLCV chart and the `5M/1H/6H/24H`-style change deltas can all be derived from one consistent time source.
+
+---
+
 ### 7.7 Phase 6 — Airdrop
 
 Once the token is trading and the pool has accumulated **≥ 50 BNB** in reserves, the airdrop becomes eligible.
@@ -1306,9 +1352,22 @@ All tables use Supabase PostgreSQL with Row-Level Security (RLS) enabled.
 | `is_buy` | BOOLEAN | True = bought, False = sold |
 | `token_amount` | NUMERIC | Amount of tokens in/out |
 | `bnb_amount` | NUMERIC | Amount of BNB in/out |
-| `usd_value` | NUMERIC | USD value at time of trade |
+| `usd_value` | NUMERIC | USD value of the trade (exact when written by the indexer; approximate for the client fast-path — see §7.6.1) |
 | `price_bnb` | NUMERIC | Token price in BNB at this trade |
-| `created_at` | TIMESTAMPTZ | |
+| `created_at` | TIMESTAMPTZ | DB **ingest** time (when the row was written) |
+| `block_time` | TIMESTAMPTZ | Exact **on-chain block** timestamp, filled by the `index-trades` indexer. Nullable for legacy/not-yet-indexed rows. All time-window queries prefer `coalesce(block_time, created_at)` |
+
+> **Counters on `tokens`:** `total_trades` and `unique_traders` are denormalized onto the `tokens` row and kept current by an `AFTER INSERT` trigger on `trades` (`_trades_update_token_counters`). They count only genuinely new inserts, so the indexer's idempotent upserts never double-count.
+
+### `indexer_state`
+
+Tracks the last block processed by each backend indexer. Service-role only (RLS enabled, no policies).
+
+| Column | Type | Description |
+|---|---|---|
+| `key` | TEXT (PK) | Indexer name (e.g. `'trades'`) |
+| `last_block` | BIGINT | Last block scanned for Swap events |
+| `updated_at` | TIMESTAMPTZ | Last cursor advance |
 
 ### `comments`
 
@@ -1683,6 +1742,26 @@ Idempotency comes from the partial unique index `creator_rewards_tx_hash_unique`
 1. Verify caller is an authorized internal service (not public-facing).
 2. Call `ProtocolTreasury.grantFeeExemption(userWallet, expiresAt)` using the backend hot wallet.
 3. Return success.
+
+---
+
+### `index-trades`
+
+**POST /functions/v1/index-trades** *(internal, called every minute by `pg_cron`)*
+
+The canonical on-chain trade indexer — the source of truth for the `trades` table (see §7.6.1). `verify_jwt = false`; it authenticates with a dedicated shared secret rather than any Supabase key.
+
+**Auth.** The caller must send `x-indexer-secret: <value>` matching the function's `INDEXER_SECRET` env var. This is deliberately decoupled from the (now-deprecated) anon/service keys: a leak of this secret only lets someone trigger an idempotent re-index, not touch the database. The internal DB writes use the runtime-injected `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Internal flow:**
+1. Reject unless `x-indexer-secret` matches `INDEXER_SECRET`.
+2. Load `pool_address → token_address` for all tokens; read the block cursor from `indexer_state` (key `'trades'`). On first run, seed the cursor to the chain head and exit.
+3. `eth_getLogs` for the Pool `Swap` topic across all pools, from `last_block + 1` to `min(head, +2000)`.
+4. For each event, compute the exact BNB leg / token leg, `price_bnb`, `usd_value` (× live BNB/USD), and `block_time` (from the block); resolve `user_id` by wallet.
+5. Upsert rows into `trades` on `tx_hash` (idempotent — corrects client fast-path rows, backfills missed ones).
+6. Advance `indexer_state.last_block`.
+
+**Scheduling (pg_cron + Vault).** A `cron.schedule('index-trades', '* * * * *', …)` job issues `net.http_post` to the function. The project URL, the public publishable key (`apikey` header), and the `x-indexer-secret` are all read from **Vault** (`vault.decrypted_secrets`) at execution time, so no secret is hardcoded in any migration. The matching `INDEXER_SECRET` is stored separately as an Edge Function secret (Supabase platform secrets store) and read at runtime via `Deno.env`.
 
 ---
 

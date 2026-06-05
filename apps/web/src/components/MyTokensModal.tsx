@@ -4,15 +4,17 @@ import { useReadContracts } from 'wagmi'
 import { formatEther, parseEther } from 'viem'
 import { X, Clock, BadgeDollarSign } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useAccount } from 'wagmi'
 import { useAuth } from '../context/AuthContext'
 import { getTokensByCreator } from '../lib/supabaseApi'
 import { getBnbPrice } from '../lib/bnbPrice'
 import { POOL_ABI } from '../constants/abis'
 import WatchlistTab from './WatchlistTab'
+import BalancesTab from './BalancesTab'
 
 const TOTAL_SUPPLY = parseEther('21000000')
 
-type TabKey = 'created' | 'watchlist'
+type TabKey = 'created' | 'balances' | 'watchlist'
 
 interface MyTokensModalProps {
   open: boolean
@@ -38,6 +40,7 @@ function timeAgo(timestamp: number): string {
 
 export default function MyTokensModal({ open, onClose }: MyTokensModalProps) {
   const { userId } = useAuth()
+  const { address } = useAccount()
   const [activeTab, setActiveTab] = useState<TabKey>('created')
   const [createdTokens, setCreatedTokens] = useState<any[]>([])
   const [loadingCreated, setLoadingCreated] = useState(false)
@@ -112,6 +115,20 @@ export default function MyTokensModal({ open, onClose }: MyTokensModalProps) {
           >
             Created Tokens
             {activeTab === 'created' && (
+              <motion.div
+                layoutId="my-tokens-tab-underline"
+                className="absolute -bottom-px left-0 right-0 h-0.5 bg-violet-500"
+              />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('balances')}
+            className={`relative px-1 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'balances' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Balances
+            {activeTab === 'balances' && (
               <motion.div
                 layoutId="my-tokens-tab-underline"
                 className="absolute -bottom-px left-0 right-0 h-0.5 bg-violet-500"
@@ -210,6 +227,11 @@ export default function MyTokensModal({ open, onClose }: MyTokensModalProps) {
                 })}
               </div>
             )
+          ) : activeTab === 'balances' ? (
+            <BalancesTab
+              userAddress={(address || undefined) as `0x${string}` | undefined}
+              bnbPrice={bnbPrice}
+            />
           ) : (
             <WatchlistTab bnbPrice={bnbPrice} />
           )}
