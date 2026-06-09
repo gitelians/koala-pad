@@ -8,14 +8,17 @@ import {
   claimQuest as claimQuestApi,
   getAllTokens,
   getClaimedQuests,
-  getDoubleRewardsActivationTime,
-  getQuestCompletionTime,
   getQuestProgress,
-  isBoostActive,
   recordQuestCompletion,
   verifyXFollow,
 } from '../lib/supabaseApi'
 import { supabase } from '../lib/supabase'
+
+// Official KoalaPad X profile + the dwell time the user must spend before the
+// X Explorer quest is marked complete (honor-system; the paid X follow-lookup
+// API is intentionally avoided).
+const KOALAPAD_X_URL = 'https://x.com/KoalaPad89742'
+const X_FOLLOW_DWELL_MS = 30_000
 import QuestCompleteModal from '../components/QuestCompleteModal'
 import Toast, { ToastState, showToastFor } from '../components/Toast'
 
@@ -128,7 +131,9 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
           .then(r => !!r.data),
       ])
       setClaimedQuests(claimed)
-      const progressWithFollow = { ...progressData, follow: followXCompletion ? 1 : 0 }
+      // 'social' is the follow-x quest's category — the key Quests.tsx reads
+      // for its progress bar.
+      const progressWithFollow = { ...progressData, social: followXCompletion ? 1 : 0 }
       setProgress(progressWithFollow)
 
       const completed: string[] = [...claimed]
@@ -223,26 +228,14 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       setClaimingQuestId(quest.id)
 
       try {
-        // 2× Rewards boost is honoured server-side; the local flag is only
-        // used for the toast copy. The edge function remains the source of
-        // truth for actual KP/coin amounts.
-        const doubleRewards = await isBoostActive(userId, 'double-rewards-1h')
-        let eligibleForDouble = false
-        if (doubleRewards) {
-          const [completionTime, activationTime] = await Promise.all([
-            getQuestCompletionTime(userId, quest.id),
-            getDoubleRewardsActivationTime(userId),
-          ])
-          if (completionTime && activationTime && completionTime >= activationTime) {
-            eligibleForDouble = true
-          }
-        }
-
-        const multiplier = eligibleForDouble ? 2 : 1
-        const kp = quest.kpReward * multiplier
-        const coins = (quest.coinsReward || 0) * multiplier
-
-        await claimQuestApi(quest.id)
+        // The server is the single source of truth for reward amounts AND the
+        // 2× boost multiplier: claim_quest returns exactly what it credited,
+        // so the toast can never disagree with the ledger. We fall back to the
+        // catalog values only if the response is somehow missing them.
+        const result: any = await claimQuestApi(quest.id)
+        const kp = Number(result?.kp ?? quest.kpReward)
+        const coins = Number(result?.coins ?? quest.coinsReward ?? 0)
+        const doubled = !!result?.doubled
 
         setClaimedQuests(prev => (prev.includes(quest.id) ? prev : [...prev, quest.id]))
 
@@ -250,7 +243,7 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
         if (kp > 0) rewardParts.push(`+${kp} KP`)
         if (coins > 0) rewardParts.push(`+${coins.toLocaleString()} COINS`)
         const rewardText = rewardParts.join(' · ')
-        const prefix = eligibleForDouble ? '2× Boost! Quest claimed' : 'Quest claimed'
+        const prefix = doubled ? '2× Boost! Quest claimed' : 'Quest claimed'
         showToast(rewardText ? `${prefix} — ${rewardText}` : `${prefix}!`, 'success')
 
         // Once claimed, the modal should close (and never reappear for that quest)
@@ -267,22 +260,33 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
     [userId, celebrateQuest, showToast],
   )
 
+  // X Explorer verification (honor-system): open @KoalaPad89742's profile,
+  // wait out a hidden dwell timer (the spinner is the only visible signal),
+  // then record completion. The user must have linked their X account first.
   const verifyFollowX = useCallback(async () => {
-    if (!userId) return { following: false, error: 'not_authed' }
+    if (!userId || verifyingQuestId) return { following: false, error: 'busy' }
+    // window.open must run inside the click gesture or popup blockers fire —
+    // verifyFollowX is invoked directly from the button's onClick and this is
+    // the first statement before any await, so we're still in the gesture.
+    try {
+      window.open(KOALAPAD_X_URL, '_blank', 'noopener,noreferrer')
+    } catch {
+      /* ignore — the dwell + record still proceeds */
+    }
     setVerifyingQuestId('follow-x')
     try {
+      // Hidden countdown — no number shown, the spinner conveys progress.
+      await new Promise(resolve => setTimeout(resolve, X_FOLLOW_DWELL_MS))
       const res = await verifyXFollow()
       if (res.following) {
-        // Optimistically promote the quest to completed; checkAll runs on the
-        // 30s tick so without this the user would wait for the next poll
-        // before seeing the Claim button.
-        setProgress(prev => ({ ...prev, follow: 1 }))
+        // Promote to completed immediately so the Claim button appears without
+        // waiting for the next checkAll poll. 'social' is the quest category,
+        // which is the key Quests.tsx reads for the progress bar.
+        setProgress(prev => ({ ...prev, social: 1 }))
         setCompletedQuests(prev => (prev.includes('follow-x') ? prev : [...prev, 'follow-x']))
-        showToast('Follow verified — claim your reward!', 'success')
+        showToast('X Explorer complete — claim your reward!', 'success')
       } else if (res.error === 'x_not_linked') {
         showToast('Connect your X account first', 'error')
-      } else if (res.error === 'not_following') {
-        showToast('Not following yet — follow @KoalaPad89742 and try again', 'error')
       } else {
         showToast('Verification failed — try again later', 'error')
       }
@@ -294,19 +298,12 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
         showToast('Connect your X account first', 'error')
         return { following: false, error: 'x_not_linked' }
       }
-      if (msg.includes('x_tier_insufficient')) {
-        showToast(
-          'Follow verification temporarily unavailable — admin is upgrading X API access',
-          'error',
-        )
-        return { following: false, error: 'x_tier_insufficient' }
-      }
       showToast('Verification failed — try again later', 'error')
       return { following: false, error: msg || 'verify_failed' }
     } finally {
       setVerifyingQuestId(null)
     }
-  }, [userId, showToast])
+  }, [userId, verifyingQuestId, showToast])
 
   const handleModalLater = useCallback(() => {
     if (!celebrateQuest || !userId || claimingFromModal) return

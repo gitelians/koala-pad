@@ -246,7 +246,7 @@ AIRDROP_SIGNER_ADDRESS=<airdrop-signer-address> # public key for AirdropVault
 
 ```bash
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_SECRET_KEYS=<service-role-key>
 SUPA_JWT_SECRET=<jwt-secret-matching-supabase-settings>
 PRIVY_APP_ID=<privy-app-id>
 PRIVY_JWKS_URL=https://auth.privy.io/oauth/.well-known/jwks.json

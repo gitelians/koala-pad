@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { GiKoala, GiTwoCoins } from 'react-icons/gi'
-import { FiLock, FiCheckCircle, FiExternalLink } from 'react-icons/fi'
+import { FiLock, FiCheckCircle, FiLoader } from 'react-icons/fi'
 import { useQuests } from '../context/QuestContext'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../data/quests'
-
-const KOALAPAD_X_URL = 'https://x.com/KoalaPad89742'
 
 interface QuestsProps {
   onStatsChange?: (completed: number, total: number, claimable: number) => void
@@ -178,25 +176,22 @@ export default function Quests({ onStatsChange }: QuestsProps = {}) {
                             Claimed
                           </div>
                         ) : quest.id === 'follow-x' ? (
-                          // X follow quest
-                          <div className="flex gap-1.5">
-                            <a
-                              href={KOALAPAD_X_URL}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] font-semibold bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 transition-colors"
-                            >
-                              Follow <FiExternalLink size={10} />
-                            </a>
-                            <button
-                              onClick={() => verifyFollowX()}
-                              disabled={!xLinked || verifyingQuestId === 'follow-x'}
-                              title={xLinked ? 'Verify you follow @KoalaPad89742' : 'Connect your X account first'}
-                              className="flex-1 py-1.5 rounded-md text-[11px] font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              {verifyingQuestId === 'follow-x' ? 'Verifying…' : 'Verify'}
-                            </button>
-                          </div>
+                          // X Explorer: one Verify button opens @KoalaPad89742's
+                          // profile and runs a hidden dwell timer (spinner only)
+                          // before marking the quest complete. Disabled until
+                          // the user has linked their X account.
+                          <button
+                            onClick={() => verifyFollowX()}
+                            disabled={!xLinked || verifyingQuestId === 'follow-x'}
+                            title={xLinked ? 'Open @KoalaPad89742 and verify' : 'Connect your X account first'}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {verifyingQuestId === 'follow-x' ? (
+                              <FiLoader size={13} className="animate-spin" />
+                            ) : (
+                              'Verify'
+                            )}
+                          </button>
                         ) : (
                           <div className="w-full py-1.5 text-center text-[10px] text-gray-600 font-mono">
                             {Math.round(percent)}%
