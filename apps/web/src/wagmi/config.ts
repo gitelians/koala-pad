@@ -13,11 +13,16 @@ import { injected } from 'wagmi/connectors'
 // because we have no Reown/WalletConnect project and we don't need one —
 // Privy already provides WalletConnect for users who pick that login method.
 
+// Same endpoint (and same env var) used by the read-only RPC calls elsewhere,
+// with the public BSC Testnet node as fallback.
+const RPC_URL =
+  import.meta.env.VITE_BSC_TESTNET_RPC || 'https://data-seed-prebsc-1-s1.bnbchain.org:8545'
+
 export const config = createConfig({
   chains: [bscTestnet],
   connectors: [injected()],
   transports: {
-    [bscTestnet.id]: http('https://data-seed-prebsc-1-s1.bnbchain.org:8545'),
+    [bscTestnet.id]: http(RPC_URL),
   },
 })
 

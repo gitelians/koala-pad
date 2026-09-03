@@ -209,9 +209,6 @@ koala-pad/
 # Privy — Authentication provider
 VITE_PRIVY_APP_ID=<your-privy-app-id>
 
-# WalletConnect — External wallet support
-VITE_WALLETCONNECT_PROJECT_ID=<your-walletconnect-project-id>
-
 # Supabase — Database & Edge Functions
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_KEY=<supabase-anon-public-key>
@@ -220,7 +217,7 @@ VITE_SUPABASE_KEY=<supabase-anon-public-key>
 VITE_FACTORY_ADDRESS=<deployed-launchpad-factory-address>
 
 # RPC
-VITE_BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
+VITE_BSC_TESTNET_RPC=https://data-seed-prebsc-1-s1.bnbchain.org:8545
 ```
 
 > **Note:** `VITE_SUPABASE_KEY` is the public anon key — safe to expose. Never put the service role key here.
@@ -229,7 +226,7 @@ VITE_BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
 
 ```bash
 # RPC + deployer
-BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
+BSC_TESTNET_RPC=https://data-seed-prebsc-1-s1.bnbchain.org:8545
 DEPLOYER_PRIVATE_KEY=<deployer-private-key>   # wallet paying gas for deployment
 BSCSCAN_API_KEY=<bscscan-api-key>             # for contract verification
 

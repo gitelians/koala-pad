@@ -24,6 +24,10 @@ import { TOKEN_ABI, POOL_ABI } from '../constants/abis'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { pushRecentVisitedToken } from '../components/SearchModal'
 
+// Read-only JSON-RPC endpoint
+const RPC_URL =
+  import.meta.env.VITE_BSC_TESTNET_RPC || 'https://data-seed-prebsc-1-s1.bnbchain.org:8545'
+
 export default function Token() {
   const { address: tokenAddress } = useParams()
   const { address: userAddress, isConnected } = useAccount()
@@ -353,7 +357,7 @@ export default function Token() {
     const start = Date.now()
     while (Date.now() - start < 60_000) {
       try {
-        const r = await fetch(import.meta.env.VITE_BSC_RPC_URL ?? '', {
+        const r = await fetch(RPC_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

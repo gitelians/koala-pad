@@ -4,9 +4,6 @@ node_modules/
 # Supabase
 supabase/
 
-# Just remove this line to upload also the smart contracts on github
-contracts/
-
 # Claude session
 .claude/
 
@@ -45,3 +42,18 @@ coverage/
 *.swo
 *~
 
+# ---------------------------------------------------------------------------
+# Contracts: ignore everything, then whitelist only what belongs on GitHub.
+# Excluded by "contracts/*": node_modules/, artifacts/, cache/,
+# typechain-types/ and .env
+# ---------------------------------------------------------------------------
+contracts/*
+!contracts/src/
+!contracts/test/
+!contracts/scripts/
+!contracts/deployments/
+!contracts/hardhat.config.ts
+!contracts/tsconfig.json
+!contracts/package.json
+!contracts/package-lock.json
+!contracts/.env.example
